@@ -21,24 +21,31 @@ byte stream.
 > run on real R9M hardware. Bench-test before you rely on it: two modules, two
 > USB-serial adapters, a script that streams data and compares it on both sides.
 
+## Documentation
+
+* **[Setup guide](docs/setup.md):** which module goes on the ground and which on the
+  craft, wiring, ArduPilot/Betaflight and ground software settings, a first bench test,
+  troubleshooting.
+* **[Configuration reference](docs/configuration.md):** every option for
+  `link_defines.txt`, the build environments, and which settings must match on both
+  modules.
+
 ## Quick start
 
 1. Edit `link_defines.txt`: set `MY_BINDING_PHRASE` and one `Regulatory_Domain_…`.
-   Both modules must be built from the same file.
-2. Build and flash one module as master and the other as slave:
+   This file is shared by both modules. Settings that differ per end (baud, power,
+   pins) go in an optional `link_defines_<env>.txt`, e.g. `link_defines_slave.txt`.
+2. Flash the **ground station** module as master and the **craft** module as slave
+   (the craft then only transmits in reply to the ground station; see the
+   [setup guide](docs/setup.md#1-which-module-goes-where)):
 
    ```
-   pio run -e master -t upload
-   pio run -e slave  -t upload
+   pio run -e master -t upload        # ground station (master_usb with the USB mod)
+   pio run -e slave  -t upload        # craft
    ```
 
-   For a module with the USB mod, use `master_usb` / `slave_usb` for that module
-   instead. The serial port type may differ between the two ends; the radio settings
-   may not.
-3. Wire the serial port, power both modules, and wait for solid green on both.
-
-The master sets the frame timing and hop sequence. Otherwise the two ends are
-symmetric, so either can be the ground unit.
+3. Fit the antennas, wire the serial ports, power both modules, and wait for solid
+   green on both.
 
 ## Flashing
 
@@ -102,9 +109,8 @@ until it is read.
 | 4 | SF9 BW500 CR4/7 | 32 B | 145 ms | ~170 B/s |
 
 Both directions get this rate at the same time. Round-trip latency is about 1-2 frames
-when no resends are needed. `src/link_config.h` lists every option: power (default
-100 mW; above 250 mW the fan output turns on), buffer sizes, timeouts, custom LoRa
-parameters.
+when no resends are needed. All other options (power, pins, buffers, timeouts, custom
+LoRa parameters) are listed in the [configuration reference](docs/configuration.md).
 
 ## Usage notes
 

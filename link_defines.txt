@@ -1,5 +1,11 @@
-# Build settings, applied to every env. Both modules must use the same values.
-# One -D flag per line; lines starting with # are ignored.
+# Build settings shared by both modules (they must agree on the link settings).
+# One -D flag per line, no spaces around "="; lines starting with # are ignored.
+#
+# Per-module settings (baud, pins, power, buffers, LEDs) can go in an optional
+# link_defines_<env>.txt, e.g. link_defines_slave.txt, which overrides this file
+# for that build only.
+#
+# Every option: docs/configuration.md
 
 # Required: identifies your pair of modules (any text, keep it private)
 #-DMY_BINDING_PHRASE="change me"
@@ -9,12 +15,10 @@
 #-DRegulatory_Domain_FCC_915
 #-DRegulatory_Domain_AU_915
 #-DRegulatory_Domain_IN_866
-#-DRegulatory_Domain_EU_433
-#-DRegulatory_Domain_AU_433
-#-DRegulatory_Domain_US_433
-#-DRegulatory_Domain_US_433_WIDE
 
-# Optional overrides of src/link_config.h, e.g.
-#-DLINK_UART_BAUD=57600
-#-DLINK_PRESET=2
-#-DLINK_POWER=PWR_250mW
+# Optional, link settings (shared only). Preset 1 = fastest .. 4 = longest range
+#-DLINK_PRESET=1
+
+# Optional, may also be set per module
+#-DLINK_UART_BAUD=115200
+#-DLINK_POWER=PWR_100mW
