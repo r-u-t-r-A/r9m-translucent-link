@@ -19,8 +19,8 @@
  * Data integrity (ARQ, flow control, reboot handling) is in link_arq.h.
  *
  * All radio (SPI) access happens from loop(); the DIO0 interrupt only sets a
- * flag, so there is no concurrent SPI access to reason about. The UART is
- * interrupt driven by the Arduino core.
+ * flag, so there is no concurrent SPI access to reason about. The serial port
+ * (UART or USB CDC) is interrupt driven by the Arduino core.
  */
 
 #include "targets.h"
@@ -45,7 +45,14 @@ static constexpr bool IS_MASTER = false;
 static LinkArq<LINK_PKT_LEN, LINK_TX_FIFO_SIZE, LINK_RX_FIFO_SIZE> link;
 static_assert(decltype(link)::PAYLOAD_MAX == LINK_PAYLOAD_MAX, "header size mismatch");
 
+#if defined(LINK_USB_SERIAL)
+#define LinkPort SerialUSB
+static_assert(LINK_LED_RED_PIN != PA11 && LINK_LED_RED_PIN != PA12 &&
+              LINK_LED_GREEN_PIN != PA11 && LINK_LED_GREEN_PIN != PA12,
+              "PA11/PA12 are the USB data lines, move the LEDs or set them to UNDEF_PIN");
+#else
 static HardwareSerial LinkPort(LINK_UART_RX_PIN, LINK_UART_TX_PIN);
+#endif
 
 static const uint8_t UID[6] = {MY_UID};
 
@@ -259,15 +266,24 @@ static void serviceSerial()
             LinkPort.read();
             continue;
         }
-        // leave it in the core's RX buffer
+        // Leave it in the core's buffer. For USB this back-pressures the host.
         if (!link.uartToAir.space())
             break;
         link.uartToAir.push(LinkPort.read());
     }
 
-    // Only remove what the port actually took (limited to its free TX
-    // buffer space), so a slow port back-pressures the link instead of
-    // losing bytes.
+#if defined(LINK_USB_SERIAL)
+    // No program has the port open (DTR low): nobody is listening, so drop
+    // the data like an unplugged cable instead of stalling the far end.
+    if (!SerialUSB.dtr())
+    {
+        link.airToUart.clear();
+        return;
+    }
+#endif
+    // Only remove what the port actually took. USB CDC write() refuses data
+    // while the host is not reading (and HardwareSerial is limited to its free
+    // space), so a slow reader back-pressures the link instead of losing bytes.
     int room = LinkPort.availableForWrite();
     uint16_t n = room > 0 ? min((uint16_t)room, link.airToUart.size()) : 0;
     uint8_t chunk[64];
@@ -390,7 +406,10 @@ void setup()
     setLed(LINK_LED_RED_PIN, true);
     setLed(LINK_LED_GREEN_PIN, false);
 
-    LinkPort.begin(LINK_UART_BAUD);
+    LinkPort.begin(LINK_UART_BAUD); // baud is ignored for USB
+#if defined(LINK_USB_SERIAL) && LINK_USB_IGNORE_DTR
+    SerialUSB.dtr(false); // treat the port as open once the host configures it
+#endif
 
     // XOR so the hop pattern differs from an ELRS link using the same phrase
     const uint32_t uidSeed = ((uint32_t)UID[2] << 24) | ((uint32_t)UID[3] << 16) | ((uint32_t)UID[4] << 8) | UID[5];

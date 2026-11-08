@@ -3,7 +3,8 @@
  * R9M transparent serial link - compile time configuration
  *
  * Everything here can be overridden with -D lines in link_defines.txt.
- * Both modules MUST be built with identical settings; only the role differs.
+ * Both modules MUST be built with identical radio settings; only the role
+ * (and optionally the serial port type) differs.
  *
  * Required in link_defines.txt:
  *   -DMY_BINDING_PHRASE="something unique"   (identifies your pair of modules)
@@ -27,8 +28,20 @@
 #endif
 
 // ---------------------------------------------------------------------------
-// Serial port (UART)
+// Serial port
 // ---------------------------------------------------------------------------
+// LINK_USB_SERIAL (set by the *_usb envs): use the STM32 USB device as a
+// virtual COM port (CDC ACM) instead of a UART. Needs a hardware mod: PA11 =
+// D-, PA12 = D+, 1.5k pull-up D+ to 3.3V, and the LEDs removed from those pins.
+// No baud rate to match, and the host is flow controlled by USB itself.
+// Data from the air is only delivered while a program has the port open
+// (DTR set); otherwise it is discarded. For host software that never sets
+// DTR, set LINK_USB_IGNORE_DTR 1 (then data waits until it is read).
+#ifndef LINK_USB_IGNORE_DTR
+#define LINK_USB_IGNORE_DTR     0
+#endif
+//
+// UART mode:
 #ifndef LINK_UART_BAUD
 #define LINK_UART_BAUD          115200
 #endif
@@ -58,13 +71,23 @@
 #endif
 
 // ---------------------------------------------------------------------------
-// LEDs (UNDEF_PIN to disable)
+// LEDs (UNDEF_PIN to disable). In USB mode the stock LED pins are the USB
+// data lines, so the LEDs are off unless moved to other pins.
 // ---------------------------------------------------------------------------
-#ifndef LINK_LED_RED_PIN
-#define LINK_LED_RED_PIN        GPIO_PIN_LED_RED
-#endif
-#ifndef LINK_LED_GREEN_PIN
-#define LINK_LED_GREEN_PIN      GPIO_PIN_LED_GREEN
+#if defined(LINK_USB_SERIAL)
+  #ifndef LINK_LED_RED_PIN
+  #define LINK_LED_RED_PIN      UNDEF_PIN
+  #endif
+  #ifndef LINK_LED_GREEN_PIN
+  #define LINK_LED_GREEN_PIN    UNDEF_PIN
+  #endif
+#else
+  #ifndef LINK_LED_RED_PIN
+  #define LINK_LED_RED_PIN      GPIO_PIN_LED_RED
+  #endif
+  #ifndef LINK_LED_GREEN_PIN
+  #define LINK_LED_GREEN_PIN    GPIO_PIN_LED_GREEN
+  #endif
 #endif
 
 // ---------------------------------------------------------------------------
