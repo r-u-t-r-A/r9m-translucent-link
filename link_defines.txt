@@ -1,0 +1,20 @@
+# Build settings, applied to every env. Both modules must use the same values.
+# One -D flag per line; lines starting with # are ignored.
+
+# Required: identifies your pair of modules (any text, keep it private)
+#-DMY_BINDING_PHRASE="change me"
+
+# Required: frequency band / hop table, exactly one
+#-DRegulatory_Domain_EU_868
+#-DRegulatory_Domain_FCC_915
+#-DRegulatory_Domain_AU_915
+#-DRegulatory_Domain_IN_866
+#-DRegulatory_Domain_EU_433
+#-DRegulatory_Domain_AU_433
+#-DRegulatory_Domain_US_433
+#-DRegulatory_Domain_US_433_WIDE
+
+# Optional overrides of src/link_config.h, e.g.
+#-DLINK_UART_BAUD=57600
+#-DLINK_PRESET=2
+#-DLINK_POWER=PWR_250mW
