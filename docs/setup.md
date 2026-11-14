@@ -181,8 +181,9 @@ stream doesn't flush anything; partial packets are sent right away.
 ## 6. Ground software
 
 * **UART + adapter:** open the adapter's port at the ground module's `LINK_UART_BAUD`.
-* **USB:** open the module's port; any baud rate. It shows up as "R9M serial link"
-  (USB ID `1209:0001`).
+* **USB:** open the module's port; any baud rate. It reports itself as "R9M link"
+  (USB ID `1209:0001`); `lsusb` shows that ID as "pid.codes Test PID", see
+  [USB identity](configuration.md#usb-identity).
 * **Mission Planner:** pick the port and connect; the baud setting doesn't matter for USB.
 * **QGroundControl:** it only auto-connects to devices it knows, so add the port once:
   Application Settings → Comm Links → Add, type Serial, the module's port (any baud),

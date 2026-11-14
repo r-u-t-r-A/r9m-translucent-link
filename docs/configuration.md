@@ -111,6 +111,28 @@ The RX/TX pins must belong to the same USART on the STM32F103:
 
 `PB7`/`PB6` (USART1 remap) are not available: they carry I2C to the power DAC.
 
+#### USB identity
+
+USB builds only. These may be set in any defines file, including a per-env one.
+
+| Define | Default | Description |
+|---|---|---|
+| `LINK_USB_VID` | `0x1209` | USB vendor ID. |
+| `LINK_USB_PID` | `0x0001` | USB product ID. |
+| `LINK_USB_MANUFACTURER` | `"r9m-translucent-link"` | Manufacturer name reported by the device. |
+| `LINK_USB_PRODUCT` | `"R9M link"` | Product name reported by the device. Up to 60 printable ASCII characters, no quotes or backslashes (also for the manufacturer). |
+
+The names are what Windows reports as the "Bus reported device description", and what
+Linux uses in `/dev/serial/by-id/` and in `lsusb -v`. The plain `lsusb` listing and
+some desktop tools show a name from their USB ID database instead, whenever the
+VID:PID is in it. `1209:0001` is in it as "pid.codes Test PID", so they show that.
+To have them show your product name, use an ID that isn't in the database. The proper
+way is to request a free product ID for this open source project from
+[pid.codes](https://pid.codes) (a pull request to their GitHub repository).
+
+Don't use `0483:5740` (the STM32 default): QGroundControl lists it as an ArduPilot
+flight controller.
+
 ### MAVLink mode
 
 For ArduPilot (or PX4) telemetry. Set it in `link_defines.local.txt` or `link_defines.txt` so both ends get it.

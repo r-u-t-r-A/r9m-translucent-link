@@ -7,6 +7,10 @@
 # MY_BINDING_PHRASE is turned into MY_UID (first 6 bytes of the MD5 of the
 # whole define line, the same derivation ExpressLRS uses).
 #
+# LINK_USB_VID / LINK_USB_PID / LINK_USB_MANUFACTURER / LINK_USB_PRODUCT set
+# the USB identity of the *_usb envs. They are turned into the Arduino core's
+# USBD_VID / USBD_PID / USB_*_STRING here (the core is compiled with them too).
+#
 # LINK_DEFINES=<file> selects another shared file (e.g. for CI); the local
 # and per-env files are then looked up next to it.
 Import("env")
@@ -66,8 +70,52 @@ if "MY_BINDING_PHRASE" not in defines:
 if not any(name.startswith("Regulatory_Domain_") for name in defines):
     raise SystemExit("set one -DRegulatory_Domain_xxx in link_defines.local.txt or link_defines.txt")
 
+USB_DEFAULTS = {
+    "LINK_USB_VID": "0x1209",
+    "LINK_USB_PID": "0x0001",
+    "LINK_USB_MANUFACTURER": "r9m-translucent-link",
+    "LINK_USB_PRODUCT": "R9M link",
+}
+
+
+def define_value(flag):
+    """Value of a -DNAME=value line, without surrounding quotes."""
+    value = flag.split("=", 1)[1] if "=" in flag else ""
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        value = value[1:-1]
+    return value
+
+
+def usb_flags(defines):
+    usb = dict(USB_DEFAULTS)
+    for name in USB_DEFAULTS:
+        if name in defines:
+            usb[name] = define_value(defines[name])
+    result = []
+    for name, macro in (("LINK_USB_VID", "USBD_VID"), ("LINK_USB_PID", "USBD_PID")):
+        try:
+            value = int(usb[name], 0)
+        except ValueError:
+            value = -1
+        if not 0 < value <= 0xFFFF:
+            raise SystemExit("%s=%s: expected a 16-bit number, e.g. 0x1209" % (name, usb[name]))
+        result.append("-D%s=0x%04X" % (macro, value))
+    for name, macro in (("LINK_USB_MANUFACTURER", "USB_MANUFACTURER_STRING"), ("LINK_USB_PRODUCT", "USB_PRODUCT_STRING")):
+        text = usb[name]
+        if not text or len(text) > 60 or not re.match(r"^[ -~]+$", text) or re.search(r"[\"'\\]", text):
+            raise SystemExit("%s=%r: use 1-60 printable ASCII characters, no quotes or backslashes" % (name, text))
+        result.append("'-D%s=\"%s\"'" % (macro, text))
+    print("USB device: %s:%s \"%s\" / \"%s\"" % (result[0][-4:], result[1][-4:],
+                                               usb["LINK_USB_MANUFACTURER"], usb["LINK_USB_PRODUCT"]))
+    return result
+
+
 flags = []
+if "LINK_USB_SERIAL" in str(env.GetProjectOption("build_flags", "")):
+    flags += usb_flags(defines)
 for name, flag in defines.items():
+    if name in USB_DEFAULTS:
+        continue  # consumed above; the strings may contain spaces
     if name == "MY_BINDING_PHRASE":
         uid = hashlib.md5(flag.encode()).digest()[:6]
         flag = "-DMY_UID=" + ",".join(str(b) for b in uid)
