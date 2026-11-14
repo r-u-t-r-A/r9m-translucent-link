@@ -34,8 +34,9 @@ byte stream.
 
 ## Quick start
 
-1. Edit `link_defines.txt`: set `MY_BINDING_PHRASE` and one `Regulatory_Domain_…`.
-   This file is shared by both modules. Settings that differ per end (baud, power,
+1. Create `link_defines.local.txt` (git-ignored) with `-DMY_BINDING_PHRASE="…"` and one
+   `-DRegulatory_Domain_…`, plus `-DLINK_MAVLINK=1` for MAVLink telemetry. It is read by
+   both builds, after the committed `link_defines.txt`. Settings that differ per end (baud, power,
    pins) go in an optional `link_defines_<env>.txt`, e.g. `link_defines_slave.txt`.
 2. Flash the **ground station** module as master and the **craft** module as slave
    (the craft then only transmits in reply to the ground station; see the

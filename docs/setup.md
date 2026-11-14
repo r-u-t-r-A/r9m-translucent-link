@@ -40,13 +40,18 @@ pair needs its own binding phrase. One master with several slaves is not support
 
 ## 2. Configure
 
-Edit `link_defines.txt` in the repository root. It is shared by every build, so both
-modules get the same link settings:
+Create `link_defines.local.txt` in the repository root. It is read by every build,
+so both modules get the same link settings, and it is git-ignored, so your binding
+phrase stays out of the repository:
 
 ```
 -DMY_BINDING_PHRASE="my-own-secret-phrase"
 -DRegulatory_Domain_EU_868
+-DLINK_MAVLINK=1
 ```
+
+(`LINK_MAVLINK=1` only for MAVLink telemetry, see section 5.) The same settings can
+also go in `link_defines.txt`, which is committed.
 
 Settings that may differ between the two ends (baud rate, power, serial pins, ...) go
 in an optional per-build file named `link_defines_<env>.txt`. It overrides the shared
@@ -121,7 +126,7 @@ off, unless you move them to free pins (`LINK_LED_RED_PIN` / `LINK_LED_GREEN_PIN
 
 ### ArduPilot (MAVLink)
 
-Build **both** modules with MAVLink mode, in `link_defines.txt`:
+Build **both** modules with MAVLink mode, in `link_defines.local.txt` (or `link_defines.txt`):
 
 ```
 -DLINK_MAVLINK=1
@@ -196,7 +201,7 @@ Do this before trusting the link on a craft.
 | Symptom | Likely cause |
 |---|---|
 | Red/green alternating | The radio chip didn't respond: hardware fault, or a non-R9M board |
-| Never goes green | Modules built with different `link_defines.txt` (phrase, domain, preset), or both built with the same role |
+| Never goes green | Modules built with different link settings (phrase, domain, preset), or both built with the same role |
 | Slave blinks fast forever | It can't hear the master: master not running, wrong band, antenna issue, too far apart |
 | Green, but garbage on one side | Baud mismatch between the module and the device it's wired to. Note that MAVLink and MSP are binary, so they always look like garbage in a text serial monitor; check them with a ground station or MAVLink tool instead |
 | Mission Planner gets heartbeats but times out connecting / stalls downloading parameters | Built without `LINK_MAVLINK=1`; ArduPilot overflows the link |

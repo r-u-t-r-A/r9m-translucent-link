@@ -1,13 +1,18 @@
 # Build settings shared by both modules (they must agree on the link settings).
 # One -D flag per line, no spaces around "="; lines starting with # are ignored.
 #
+# Keep your binding phrase out of git: put it (and any other private setting)
+# in link_defines.local.txt instead. That file is git-ignored and read after
+# this one, so its settings win.
+#
 # Per-module settings (baud, pins, power, buffers, LEDs) can go in an optional
 # link_defines_<env>.txt, e.g. link_defines_slave.txt, which overrides this file
 # for that build only.
 #
 # Every option: docs/configuration.md
 
-# Required: identifies your pair of modules (any text, keep it private)
+# Required: identifies your pair of modules (any text, keep it private:
+# set it in link_defines.local.txt)
 #-DMY_BINDING_PHRASE="change me"
 
 # Required: frequency band / hop table, exactly one

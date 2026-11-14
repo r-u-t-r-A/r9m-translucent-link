@@ -7,16 +7,19 @@ no menus.
 
 | File | Applies to | Use for |
 |---|---|---|
-| `link_defines.txt` | every build | binding phrase, domain, radio settings, anything both ends share |
+| `link_defines.txt` | every build | settings both ends share; committed, so not your binding phrase |
+| `link_defines.local.txt` (optional, git-ignored) | every build | binding phrase and anything else you don't want in git |
 | `link_defines_<env>.txt` (optional) | only that env, e.g. `link_defines_slave.txt` | per-end settings: baud, pins, power, buffers, LEDs |
 
 Format: one `-DNAME` or `-DNAME=value` per line, with no spaces around `=`. Lines
-starting with `#` are ignored. A per-env file overrides a setting of the same name from
-`link_defines.txt`. Settings marked **shared** below are refused in per-env files,
+starting with `#` are ignored. The files are read in the order of the table, and a later
+file overrides a setting of the same name (a domain in `link_defines.local.txt` replaces
+the one in `link_defines.txt`). Settings marked **shared** below are refused in per-env files,
 because the two modules must agree on them.
 
 The defaults live in `src/link_config.h`. `LINK_DEFINES=/path/to/file pio run ...` uses
-a different shared file; per-env files are then looked up in that file's directory.
+a different shared file; the local and per-env files are then looked up in that file's
+directory.
 
 ## Build environments
 
@@ -109,7 +112,7 @@ The RX/TX pins must belong to the same USART on the STM32F103:
 
 ### MAVLink mode
 
-For ArduPilot (or PX4) telemetry. Set it in `link_defines.txt` so both ends get it.
+For ArduPilot (or PX4) telemetry. Set it in `link_defines.local.txt` or `link_defines.txt` so both ends get it.
 
 | Define | Default | Description |
 |---|---|---|

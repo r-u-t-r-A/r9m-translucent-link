@@ -1,12 +1,14 @@
 # Pre-build script: adds the -D lines of link_defines.txt to the build, then
-# those of link_defines_<env>.txt (e.g. link_defines_slave.txt) if present,
-# which override settings of the same name for that env only.
+# those of link_defines.local.txt (git-ignored, for the binding phrase and
+# other private settings) and link_defines_<env>.txt (e.g.
+# link_defines_slave.txt) if present. Later files override settings of the
+# same name; the per-env file only for that env.
 #
 # MY_BINDING_PHRASE is turned into MY_UID (first 6 bytes of the MD5 of the
 # whole define line, the same derivation ExpressLRS uses).
 #
-# LINK_DEFINES=<file> selects another shared file (e.g. for CI); the per-env
-# files are then looked up next to it.
+# LINK_DEFINES=<file> selects another shared file (e.g. for CI); the local
+# and per-env files are then looked up next to it.
 Import("env")
 import hashlib
 import os
@@ -36,11 +38,20 @@ def read_defines(path):
 
 
 shared_path = os.environ.get("LINK_DEFINES") or os.path.join(env.subst("$PROJECT_DIR"), "link_defines.txt")
-env_path = os.path.join(os.path.dirname(os.path.abspath(shared_path)), "link_defines_%s.txt" % env["PIOENV"])
+defines_dir = os.path.dirname(os.path.abspath(shared_path))
+local_path = os.path.join(defines_dir, "link_defines.local.txt")
+env_path = os.path.join(defines_dir, "link_defines_%s.txt" % env["PIOENV"])
 
 defines = {}  # name -> flag, insertion ordered
 for name, flag in read_defines(shared_path):
     defines[name] = flag
+
+if os.path.isfile(local_path):
+    print("Using settings from " + os.path.basename(local_path))
+    for name, flag in read_defines(local_path):
+        if name.startswith("Regulatory_Domain_"):  # replaces the shared file's domain
+            defines = {n: f for n, f in defines.items() if not n.startswith("Regulatory_Domain_")}
+        defines[name] = flag
 
 if os.path.isfile(env_path):
     print("Using overrides from " + os.path.basename(env_path))
@@ -51,9 +62,9 @@ if os.path.isfile(env_path):
         defines[name] = flag
 
 if "MY_BINDING_PHRASE" not in defines:
-    raise SystemExit("link_defines.txt: set -DMY_BINDING_PHRASE=\"...\" (same on both modules)")
+    raise SystemExit("set -DMY_BINDING_PHRASE=\"...\" in link_defines.local.txt or link_defines.txt (same on both modules)")
 if not any(name.startswith("Regulatory_Domain_") for name in defines):
-    raise SystemExit("link_defines.txt: set one -DRegulatory_Domain_xxx")
+    raise SystemExit("set one -DRegulatory_Domain_xxx in link_defines.local.txt or link_defines.txt")
 
 flags = []
 for name, flag in defines.items():
