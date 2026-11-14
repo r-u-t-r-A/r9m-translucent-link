@@ -60,17 +60,17 @@ module.
 | `LINK_SF` | (preset) | `6`–`12` | LoRa spreading factor. Custom only. |
 | `LINK_BW_KHZ` | (preset) | `125`, `250`, `500` | LoRa bandwidth. Custom only. |
 | `LINK_CR` | (preset) | `5`–`8` | LoRa coding rate 4/x. Custom only. |
-| `LINK_PKT_LEN` | (preset) | `8`–`128` | Packet length in bytes, including 7 bytes of header and CRC. Custom only. |
+| `LINK_PKT_LEN` | (preset) | `8`–`128` | Packet length in bytes, including 8 bytes of header and CRC. Custom only. |
 | `LINK_PREAMBLE_LEN` | `8` | ≥ `6` | LoRa preamble length in symbols. |
 | `LINK_TURNAROUND_US` | `1000` | µs | Time budgeted per frame between receiving a packet and the reply being on air. |
 | `LINK_GUARD_US` | `1000` | µs | Extra idle time per frame for hopping. |
 
 | Preset | Modulation | Packet | Frame | Payload, each direction |
 |---|---|---|---|---|
-| `1` (default) | SF6 BW500 CR4/5 (ELRS 200 Hz modulation) | 64 B | 35 ms | ~1620 B/s |
-| `2` | SF7 BW500 CR4/5 | 64 B | 59 ms | ~960 B/s |
-| `3` | SF8 BW500 CR4/7 | 48 B | 110 ms | ~370 B/s |
-| `4` | SF9 BW500 CR4/7 | 32 B | 145 ms | ~170 B/s |
+| `1` (default) | SF6 BW500 CR4/5 (ELRS 200 Hz modulation) | 64 B | 35 ms | ~1600 B/s |
+| `2` | SF7 BW500 CR4/5 | 64 B | 59 ms | ~940 B/s |
+| `3` | SF8 BW500 CR4/7 | 48 B | 110 ms | ~360 B/s |
+| `4` | SF9 BW500 CR4/7 | 32 B | 145 ms | ~165 B/s |
 
 Higher presets trade throughput for range. Both directions get the listed rate at the
 same time. Frame length = 2 × time on air + 2 × `LINK_TURNAROUND_US` + `LINK_GUARD_US`,
@@ -106,6 +106,27 @@ The RX/TX pins must belong to the same USART on the STM32F103:
 | USART3 | `PB11` / `PB10` | The S.Port line, through a buffer; not usable as full duplex without rework. |
 
 `PB7`/`PB6` (USART1 remap) are not available: they carry I2C to the power DAC.
+
+### MAVLink mode
+
+For ArduPilot (or PX4) telemetry. Set it in `link_defines.txt` so both ends get it.
+
+| Define | Default | Description |
+|---|---|---|
+| `LINK_MAVLINK` | `0` | `1` makes the module MAVLink aware. The data is still passed through unchanged, but: **(a)** when a UART input arrives faster than the radio carries it, whole MAVLink frames are dropped instead of random bytes, so everything that gets through is intact; **(b)** the module inserts `RADIO_STATUS` messages between frames on its serial output, like a SiK radio. ArduPilot uses their `txbuf` field as flow control: it slows its telemetry streams and pauses the parameter download until the radio catches up. Ground stations show `rssi`/`remrssi` from them. Leave it at `0` for MSP or other data. |
+| `LINK_MAVLINK_STATUS_MS` | `50` | Interval between inserted `RADIO_STATUS` messages (21 bytes each; they are added on the serial output only and don't use radio bandwidth). |
+
+`RADIO_STATUS` fields: `rssi` / `remrssi` = signal strength of the last packet received
+by this module / by the other module, on the SiK scale (dBm = value / 1.9 − 127, 0 when
+the link is down); `txbuf` = free share of the first half of `LINK_TX_FIFO_SIZE`;
+`noise` = estimated noise floor (same scale); `rxerrors` = packets that failed the CRC.
+The messages come from system ID 51, component 68 (`MAV_COMP_ID_TELEMETRY_RADIO`), like a
+SiK radio.
+
+Without `LINK_MAVLINK`, ArduPilot sends as fast as the UART baud rate allows (a
+parameter download alone runs at several KB/s), the input buffer overflows, and the bytes
+lost in the middle of messages show up as corrupted packets and a ground station that
+times out while connecting.
 
 ### Power
 

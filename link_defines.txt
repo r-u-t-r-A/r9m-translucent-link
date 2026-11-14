@@ -22,3 +22,7 @@
 # Optional, may also be set per module
 #-DLINK_UART_BAUD=115200
 #-DLINK_POWER=PWR_100mW
+
+# Optional, for ArduPilot/PX4 MAVLink telemetry (keep it the same on both modules):
+# RADIO_STATUS flow control and RSSI, like a SiK radio. Leave off for MSP.
+#-DLINK_MAVLINK=1

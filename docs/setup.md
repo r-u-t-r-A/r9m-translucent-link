@@ -121,6 +121,19 @@ off, unless you move them to free pins (`LINK_LED_RED_PIN` / `LINK_LED_GREEN_PIN
 
 ### ArduPilot (MAVLink)
 
+Build **both** modules with MAVLink mode, in `link_defines.txt`:
+
+```
+-DLINK_MAVLINK=1
+```
+
+This is needed for a working connection. ArduPilot has no idea how fast the radio is
+and sends at full UART speed; with MAVLink mode the craft module tells it, through
+`RADIO_STATUS` messages, to slow down when its buffer fills (the same mechanism SiK
+radios use), and drops whole messages rather than corrupting them if it still overflows.
+Without it, Mission Planner times out while downloading parameters. Mission Planner also
+shows the link RSSI of both ends from these messages.
+
 For the TELEM port the slave is wired to (`n` = the SERIAL port number):
 
 | Parameter | Value |
@@ -129,12 +142,14 @@ For the TELEM port the slave is wired to (`n` = the SERIAL port number):
 | `SERIALn_BAUD` | the craft module's `LINK_UART_BAUD` / 1000, e.g. `115` or `57` |
 | `BRD_SERn_RTSCTS` (if the port has it) | `0`, flow control off |
 
-The link carries about **1.6 KB/s in each direction** with the default preset, which is
-less than ArduPilot's default telemetry rates on a fast port. Lower the stream rates for
-that MAVLink channel (`SRn_*` parameters), and also check the rates the ground software
-requests (Mission Planner: Config → Planner → Telemetry rates). If data is produced
-faster than the link carries it, the 2 KB input buffer fills and bytes are dropped; the
-MAVLink parser skips damaged messages, but telemetry gets choppy.
+The link carries about **1.6 KB/s in each direction** with the default preset. A
+parameter download (about 950 parameters on ArduCopter, roughly 35 KB) therefore takes
+about half a minute on the first connect; Mission Planner caches parameters, so later connects are
+quicker. MAVLink mode keeps ArduPilot within the link's rate automatically, but lower
+stream rates leave more room for parameters, missions and commands: set the `SRn_*`
+parameters for that port, and check the rates the ground software requests (Mission
+Planner: Config → Planner → Telemetry rates). Preset 2 or higher halves the rate or
+more, so lower stream rates matter more there.
 
 ### Betaflight / INAV (MSP)
 
@@ -183,7 +198,8 @@ Do this before trusting the link on a craft.
 | Red/green alternating | The radio chip didn't respond: hardware fault, or a non-R9M board |
 | Never goes green | Modules built with different `link_defines.txt` (phrase, domain, preset), or both built with the same role |
 | Slave blinks fast forever | It can't hear the master: master not running, wrong band, antenna issue, too far apart |
-| Green, but garbage on one side | Baud mismatch between the module and the device it's wired to |
+| Green, but garbage on one side | Baud mismatch between the module and the device it's wired to. Note that MAVLink and MSP are binary, so they always look like garbage in a text serial monitor; check them with a ground station or MAVLink tool instead |
+| Mission Planner gets heartbeats but times out connecting / stalls downloading parameters | Built without `LINK_MAVLINK=1`; ArduPilot overflows the link |
 | Green, data arrives in bursts or is choppy | More data offered than the link carries; lower stream rates or choose a faster preset |
 | USB port opens but no data | Host doesn't set DTR; build with `LINK_USB_IGNORE_DTR=1` |
 | USB device not detected | D+ pull-up missing, or LEDs still connected to PA11/PA12 |

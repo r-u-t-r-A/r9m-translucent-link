@@ -13,6 +13,8 @@ byte stream.
   receiver's output buffer, so a slow port slows the sender instead of losing data.
 * **Reboot-safe:** each boot draws a random session ID, so either side resynchronises
   cleanly when the other one restarts.
+* **MAVLink mode** (`LINK_MAVLINK=1`): `RADIO_STATUS` flow control and RSSI reporting,
+  like a SiK telemetry radio, so ArduPilot throttles itself to the link's rate.
 * **Frequency hopping** using the ExpressLRS sub-GHz channel plans.
 * **Serial port:** a UART, or (with a small hardware mod) the STM32's own USB port as a
   virtual COM port.
@@ -103,10 +105,10 @@ until it is read.
 
 | # | Modulation | Packet | Frame | Payload, each direction |
 |---|---|---|---|---|
-| 1 (default) | SF6 BW500 CR4/5 (ELRS 200 Hz modulation) | 64 B | 35 ms | ~1620 B/s |
-| 2 | SF7 BW500 CR4/5 | 64 B | 59 ms | ~960 B/s |
-| 3 | SF8 BW500 CR4/7 | 48 B | 110 ms | ~370 B/s |
-| 4 | SF9 BW500 CR4/7 | 32 B | 145 ms | ~170 B/s |
+| 1 (default) | SF6 BW500 CR4/5 (ELRS 200 Hz modulation) | 64 B | 35 ms | ~1600 B/s |
+| 2 | SF7 BW500 CR4/5 | 64 B | 59 ms | ~940 B/s |
+| 3 | SF8 BW500 CR4/7 | 48 B | 110 ms | ~360 B/s |
+| 4 | SF9 BW500 CR4/7 | 32 B | 145 ms | ~165 B/s |
 
 Both directions get this rate at the same time. Round-trip latency is about 1-2 frames
 when no resends are needed. All other options (power, pins, buffers, timeouts, custom
@@ -114,8 +116,10 @@ LoRa parameters) are listed in the [configuration reference](docs/configuration.
 
 ## Usage notes
 
-* **ArduPilot:** `SERIALn_PROTOCOL=2`, `SERIALn_BAUD` = `LINK_UART_BAUD`/1000. Lower
-  the telemetry stream rates so they fit about 1.6 KB/s.
+* **ArduPilot:** build both modules with `-DLINK_MAVLINK=1`, then set
+  `SERIALn_PROTOCOL=2` and `SERIALn_BAUD` = `LINK_UART_BAUD`/1000. Without MAVLink mode,
+  ArduPilot sends faster than the link carries and the ground station can't connect.
+  Lower stream rates still leave more room for parameters and commands.
 * **Betaflight:** enable MSP on the UART. The configurator works, but slowly, because
   every MSP request costs a round trip.
 * Bytes are only lost if a port feeds data faster than the link carries it for longer
@@ -152,6 +156,8 @@ pio test -e native
 
 These simulate the frame exchange with packet loss, bit corruption, a slow serial port
 and hundreds of reboots on either side, and check that both byte streams arrive exactly.
+The MAVLink mode tests check the frame tracking, whole-frame dropping on overflow, and
+the `RADIO_STATUS` encoding against frames generated with pymavlink.
 
 ## Origin and licence
 
