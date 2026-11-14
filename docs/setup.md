@@ -102,6 +102,15 @@ rail.
 | PA9 (module TX) | RX of the flight controller / USB-serial adapter |
 | GND | GND |
 
+![R9M 2018 solder points](r9m_uart_pins.jpg)
+
+R9M (2018) solder points. Photo: the ExpressLRS WiFi backpack guide
+([ExpressLRS-Hardware](https://github.com/ExpressLRS/ExpressLRS-Hardware/blob/master/img/r9m_backpack_pins.jpg)).
+For this firmware you only need **RX1** (PA10, at transistor J6), **TX1** (PA9, on the
+chip leg, or the alternative pad on the top side) and **GND**. The photo's labels are for
+an ESP backpack: NRESET/BOOT0 and the ESP pin names don't apply here, and removing J6 was
+later found to be unnecessary.
+
 The UART uses 3.3 V logic, 8N1, at `LINK_UART_BAUD` (default 115200). Only TX/RX are
 used, so turn off hardware flow control (RTS/CTS) on the other side.
 
