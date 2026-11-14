@@ -16,7 +16,8 @@
  * hopping blind for LINK_SLAVE_COAST_MS, then parks on the sync channel
  * (visited by the master once per pass through the channel list).
  *
- * Data integrity (ARQ, flow control, reboot handling) is in link_arq.h.
+ * Data integrity (ARQ, flow control, reboot handling) is in link_arq.h,
+ * the optional MAVLink mode (LINK_MAVLINK) in link_mavlink.h.
  *
  * All radio (SPI) access happens from loop(); the DIO0 interrupt only sets a
  * flag, so there is no concurrent SPI access to reason about. The serial port
@@ -31,6 +32,7 @@
 
 #include "link_config.h"
 #include "link_arq.h"
+#include "link_mavlink.h"
 
 using namespace linkcfg;
 
@@ -68,6 +70,20 @@ static bool evRx;
 static bool evTxDone;
 static uint32_t rxTimeUs;
 static bool rxFeiPositive;
+static int16_t rxRssiDbm;
+static int8_t rxSnrRaw;
+
+// Link quality, reported in RADIO_STATUS (LINK_MAVLINK) and sent to the peer
+// in every packet header
+static uint16_t rxErrors;   // packets that failed the CRC
+static uint8_t noiseLevel;  // estimated noise floor, SiK RSSI scale
+
+#if defined(Regulatory_Domain_EU_433) || defined(Regulatory_Domain_AU_433) || \
+    defined(Regulatory_Domain_US_433) || defined(Regulatory_Domain_US_433_WIDE)
+static constexpr int16_t RSSI_OFFSET_DBM = -164; // SX1276 LF port
+#else
+static constexpr int16_t RSSI_OFFSET_DBM = -157; // SX1276 HF port
+#endif
 
 static bool onRxDone(SX12xxDriverCommon::rx_status status)
 {
@@ -76,6 +92,12 @@ static bool onRxDone(SX12xxDriverCommon::rx_status status)
     rxTimeUs = micros();
     memcpy(rxPkt, Radio.RXdataBuffer, LINK_PKT_LEN);
     rxFeiPositive = Radio.GetFrequencyErrorbool();
+    // Same correction as SX127xDriver::GetLastPacketStats(), but in 16 bits:
+    // the driver's int8_t result wraps below -128 dBm.
+    rxSnrRaw = Radio.GetLastPacketSNRRaw(SX12XX_Radio_1);
+    rxRssiDbm = RSSI_OFFSET_DBM + Radio.UnsignedGetLastPacketRSSI(SX12XX_Radio_1);
+    if (rxSnrRaw < 0)
+        rxRssiDbm += rxSnrRaw / RADIO_SNR_SCALE;
     evRx = true;
     return true;
 }
@@ -106,7 +128,14 @@ static inline void pollRadio()
 static void acceptPacket()
 {
     lastValidRxMs = millis();
+    link.txStatus = mavRssiFromDbm(rxRssiDbm); // tells the peer how well we hear it
+    noiseLevel = mavRssiFromDbm(rxRssiDbm - rxSnrRaw / RADIO_SNR_SCALE);
     link.process(rxPkt);
+}
+
+static void rejectPacket()
+{
+    rxErrors++;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,11 +164,18 @@ static void roleLoop()
     if (evRx)
     {
         evRx = false;
-        if (awaitingReply && link.valid(rxPkt) && rxPkt[2] == FHSSgetCurrIndex())
+        if (awaitingReply)
         {
-            awaitingReply = false;
-            Radio.SetTxIdleMode();
-            acceptPacket();
+            if (link.valid(rxPkt) && rxPkt[2] == FHSSgetCurrIndex())
+            {
+                awaitingReply = false;
+                Radio.SetTxIdleMode();
+                acceptPacket();
+            }
+            else
+            {
+                rejectPacket();
+            }
         }
     }
 
@@ -214,7 +250,11 @@ static void roleLoop()
     if (evRx)
     {
         evRx = false;
-        if (!transmitting && link.valid(rxPkt))
+        if (!transmitting && !link.valid(rxPkt))
+        {
+            rejectPacket();
+        }
+        else if (!transmitting)
         {
             const uint8_t hopIndex = rxPkt[2];
             FHSSsetCurrIndex(hopIndex);
@@ -257,7 +297,35 @@ static bool isSearching() { return !synced; }
 // ---------------------------------------------------------------------------
 // Serial port, LEDs, power
 // ---------------------------------------------------------------------------
-static void serviceSerial()
+#if LINK_MAVLINK
+static MavInput<decltype(link.uartToAir)> mavIn;
+static MavTracker mavOut;      // frame boundaries in what goes out of the port
+static bool mavOutResync;      // output was discarded: skip to the next frame start
+static uint32_t lastOutMs;     // last time output made progress
+static uint32_t lastStatusMs;
+static uint8_t statusSeq;
+
+static MavRadioStatus radioStatus()
+{
+    // txbuf is the free share of the first half of the input buffer, so
+    // ArduPilot throttles while there is still room for the bytes already on
+    // their way, and the queue (= latency) stays short.
+    const uint16_t window = LINK_TX_FIFO_SIZE / 2;
+    const uint16_t used = link.uartToAir.size();
+    MavRadioStatus st = {};
+    st.txbuf = used >= window ? 0 : (uint8_t)(100 - (uint32_t)used * 100 / window);
+    st.rxerrors = rxErrors;
+    if (linkUp)
+    {
+        st.rssi = link.txStatus;
+        st.remrssi = link.peerStatus;
+        st.noise = noiseLevel;
+    }
+    return st;
+}
+#endif
+
+static void serviceSerial(uint32_t nowMs)
 {
     while (LinkPort.available())
     {
@@ -266,11 +334,21 @@ static void serviceSerial()
             LinkPort.read();
             continue;
         }
+#if LINK_MAVLINK && !defined(LINK_USB_SERIAL)
+        // A UART has no flow control: always read it, and when the buffer is
+        // full drop whole MAVLink frames rather than leaving it to the UART
+        // to lose bytes in the middle of frames.
+        mavIn.put(LinkPort.read(), link.uartToAir, nowMs);
+#else
         // Leave it in the core's buffer. For USB this back-pressures the host.
         if (!link.uartToAir.space())
             break;
         link.uartToAir.push(LinkPort.read());
+#endif
     }
+#if LINK_MAVLINK && !defined(LINK_USB_SERIAL)
+    mavIn.poll(link.uartToAir, nowMs, 50);
+#endif
 
 #if defined(LINK_USB_SERIAL)
     // No program has the port open (DTR low): nobody is listening, so drop
@@ -278,21 +356,71 @@ static void serviceSerial()
     if (!SerialUSB.dtr())
     {
         link.airToUart.clear();
+#if LINK_MAVLINK
+        mavOutResync = true;
+#endif
         return;
     }
 #endif
+
+    int room = LinkPort.availableForWrite();
+
+#if LINK_MAVLINK
+    if (mavOutResync)
+    {
+        // Resume output at a frame start, so the reader never sees the tail
+        // of a frame whose beginning was discarded.
+        while (link.airToUart.size() && link.airToUart.peek(0) != MavTracker::STX_V1 &&
+               link.airToUart.peek(0) != MavTracker::STX_V2)
+            link.airToUart.drop(1);
+        if (!link.airToUart.size())
+            return;
+        mavOut.reset();
+        mavOutResync = false;
+    }
+
+    // The rest of a frame that never arrives (link lost, far end rebooted)
+    // must not hold up RADIO_STATUS for good.
+    if (!mavOut.betweenFrames() && !link.airToUart.size() && (nowMs - lastOutMs) > 200)
+        mavOut.reset();
+
+    // RADIO_STATUS goes between frames. When one is due, output stops at the
+    // end of the current frame until there is room for it.
+    const bool statusDue = (nowMs - lastStatusMs) >= LINK_MAVLINK_STATUS_MS;
+    if (statusDue && mavOut.betweenFrames())
+    {
+        if (room < MAV_RADIO_STATUS_MAX_LEN)
+            return;
+        uint8_t frame[MAV_RADIO_STATUS_MAX_LEN];
+        const uint8_t len = mavPackRadioStatus(frame, statusSeq++, radioStatus());
+        LinkPort.write(frame, len);
+        lastStatusMs = nowMs;
+        room -= len;
+    }
+#endif
+
     // Only remove what the port actually took. USB CDC write() refuses data
     // while the host is not reading (and HardwareSerial is limited to its free
     // space), so a slow reader back-pressures the link instead of losing bytes.
-    int room = LinkPort.availableForWrite();
     uint16_t n = room > 0 ? min((uint16_t)room, link.airToUart.size()) : 0;
     uint8_t chunk[64];
     n = min(n, (uint16_t)sizeof(chunk));
+#if LINK_MAVLINK
+    if (statusDue && !mavOut.betweenFrames())
+        n = min(n, mavOut.untilBoundary());
+#endif
     if (n)
     {
         for (uint16_t i = 0; i < n; i++)
             chunk[i] = link.airToUart.peek(i);
-        link.airToUart.drop(LinkPort.write(chunk, n));
+        const uint16_t written = LinkPort.write(chunk, n);
+#if LINK_MAVLINK
+        for (uint16_t i = 0; i < written; i++)
+            mavOut.feed(chunk[i]);
+        if (written)
+            lastOutMs = nowMs;
+#endif
+        link.airToUart.drop(written);
     }
 }
 
@@ -303,7 +431,12 @@ static void updateLinkState(uint32_t nowMs)
     {
         linkUp = up;
         if (!linkUp && LINK_DROP_INPUT_WHEN_DISCONNECTED)
+        {
             link.uartToAir.clear();
+#if LINK_MAVLINK
+            mavIn.reset();
+#endif
+        }
     }
 }
 
@@ -443,8 +576,8 @@ void setup()
 void loop()
 {
     roleLoop();
-    serviceSerial();
     const uint32_t nowMs = millis();
+    serviceSerial(nowMs);
     updateLinkState(nowMs);
     updateLeds(nowMs);
 }

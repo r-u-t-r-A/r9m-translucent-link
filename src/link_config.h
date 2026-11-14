@@ -59,6 +59,19 @@
 #ifndef LINK_DROP_INPUT_WHEN_DISCONNECTED
 #define LINK_DROP_INPUT_WHEN_DISCONNECTED 1
 #endif
+// MAVLink mode, for ArduPilot/PX4 telemetry. The link stays transparent, but
+//  - a UART input that overflows drops whole MAVLink frames, never parts;
+//  - RADIO_STATUS messages (like a SiK radio: rssi, remrssi, txbuf) are
+//    inserted between frames every LINK_MAVLINK_STATUS_MS. ArduPilot uses
+//    txbuf to slow its streams and parameter download to what the radio
+//    carries, and ground stations show the RSSI values.
+// Leave it off for MSP or other non-MAVLink data.
+#ifndef LINK_MAVLINK
+#define LINK_MAVLINK            0
+#endif
+#ifndef LINK_MAVLINK_STATUS_MS
+#define LINK_MAVLINK_STATUS_MS  50
+#endif
 // Buffer between serial input and the air (power of 2).
 #ifndef LINK_TX_FIFO_SIZE
 #define LINK_TX_FIFO_SIZE       2048
@@ -94,10 +107,10 @@
 // Radio
 // ---------------------------------------------------------------------------
 // Presets (both directions get the listed payload rate simultaneously):
-//   1 FAST   SF6 BW500 CR4/5 64B pkt, 35ms frame  ~1620 B/s/dir (ELRS 200Hz modulation)
-//   2 NORMAL SF7 BW500 CR4/5 64B pkt, 59ms frame   ~960 B/s/dir (~ELRS 100Hz)
-//   3 LONG   SF8 BW500 CR4/7 48B pkt, 110ms frame  ~370 B/s/dir (~ELRS 50Hz)
-//   4 XLONG  SF9 BW500 CR4/7 32B pkt, 145ms frame  ~170 B/s/dir (~ELRS 25Hz)
+//   1 FAST   SF6 BW500 CR4/5 64B pkt, 35ms frame  ~1600 B/s/dir (ELRS 200Hz modulation)
+//   2 NORMAL SF7 BW500 CR4/5 64B pkt, 59ms frame    ~940 B/s/dir (~ELRS 100Hz)
+//   3 LONG   SF8 BW500 CR4/7 48B pkt, 110ms frame  ~360 B/s/dir (~ELRS 50Hz)
+//   4 XLONG  SF9 BW500 CR4/7 32B pkt, 145ms frame  ~165 B/s/dir (~ELRS 25Hz)
 // Set LINK_PRESET 0 and define LINK_SF/LINK_BW_KHZ/LINK_CR/LINK_PKT_LEN for
 // a custom mode.
 #ifndef LINK_PRESET
@@ -164,7 +177,7 @@
 // ---------------------------------------------------------------------------
 // Derived values, do not edit
 // ---------------------------------------------------------------------------
-#define LINK_HDR_LEN            5
+#define LINK_HDR_LEN            6
 #define LINK_CRC_LEN            2
 #define LINK_PAYLOAD_MAX        (LINK_PKT_LEN - LINK_HDR_LEN - LINK_CRC_LEN)
 

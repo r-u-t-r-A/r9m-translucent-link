@@ -10,7 +10,8 @@
  *   [2] hop index (master: current, slave: echo)
  *   [3] payload length
  *   [4] session id of the peer whose data the ACK bit refers to
- *   [5..]  payload, zero padded
+ *   [5] status byte, opaque to the ARQ (link_main: sender's RSSI)
+ *   [6..]  payload, zero padded
  *   [-2..] CRC16-CCITT, seeded from the binding phrase
  *
  * Sender: a payload is repeated in every packet until the peer ACKs its SEQ.
@@ -26,7 +27,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#define LINK_PROTO_VERSION 1
+#define LINK_PROTO_VERSION 2
 
 // Ring buffer, N must be a power of 2 <= 32768
 template <uint16_t N>
@@ -61,7 +62,7 @@ template <uint8_t PKT_LEN, uint16_t TX_FIFO, uint16_t RX_FIFO>
 class LinkArq
 {
 public:
-    static const uint8_t HDR_LEN = 5;
+    static const uint8_t HDR_LEN = 6;
     static const uint8_t CRC_LEN = 2;
     static const uint8_t PAYLOAD_MAX = PKT_LEN - HDR_LEN - CRC_LEN;
     static_assert(PKT_LEN > HDR_LEN + CRC_LEN, "packet too small");
@@ -74,6 +75,8 @@ public:
 
     LinkRing<TX_FIFO> uartToAir; // bytes waiting to go over the air
     LinkRing<RX_FIFO> airToUart; // bytes received, waiting for the UART
+    uint8_t txStatus = 0;        // sent in every packet
+    uint8_t peerStatus = 0;      // from the last valid packet of the peer
 
     // Also used to simulate a reboot in tests: all link state is reset
     void begin(bool isMaster, uint16_t crcSeed, uint8_t session)
@@ -89,6 +92,7 @@ public:
         ackValid = false;
         peerKnown = false;
         peerSession = 0;
+        peerStatus = 0;
         uartToAir.clear();
         airToUart.clear();
     }
@@ -113,6 +117,7 @@ public:
         pkt[2] = hopIndex;
         pkt[3] = len;
         pkt[4] = peerSession;
+        pkt[5] = txStatus;
         memcpy(&pkt[HDR_LEN], txData, len);
         memset(&pkt[HDR_LEN + len], 0, PAYLOAD_MAX - len);
         uint16_t crc = linkCrc16(pkt, PKT_LEN - CRC_LEN, seed);
@@ -140,6 +145,7 @@ public:
         const uint8_t flags = pkt[0];
         const uint8_t session = pkt[1];
         const uint8_t len = pkt[3];
+        peerStatus = pkt[5];
 
         if (!peerKnown || session != peerSession)
         {
