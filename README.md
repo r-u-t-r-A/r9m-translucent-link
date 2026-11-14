@@ -87,11 +87,13 @@ The F103 has no internal USB pull-up. At boot the firmware briefly drives D+ low
 that the PC re-enumerates the device after a reset. In USB builds the LEDs are off,
 unless you move them to free pins with `LINK_LED_RED_PIN` / `LINK_LED_GREEN_PIN`.
 
-Data from the air is only delivered while a program has the port open (DTR set);
-otherwise it is discarded, like a cable with nothing on the other end. While the port is
-open, a program that reads slowly holds the link back instead of losing bytes. For host
-software that never sets DTR, build with `-DLINK_USB_IGNORE_DTR=1`; data then waits
-until it is read.
+The device identifies as `1209:0001` "R9M serial link", so ground stations don't
+mistake it for a flight controller (the STM32 default ID `0483:5740` is on
+QGroundControl's list of ArduPilot boards). DTR is ignored, since Mission Planner doesn't
+set it. When no program reads the port for 250 ms, data from the air is discarded, like a
+cable with nothing on the other end; a program that reads slowly holds the link back
+instead of losing bytes. `-DLINK_USB_REQUIRE_DTR=1` makes the port count as open only
+while DTR is set.
 
 ## LEDs
 

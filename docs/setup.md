@@ -172,10 +172,12 @@ stream doesn't flush anything; partial packets are sent right away.
 ## 6. Ground software
 
 * **UART + adapter:** open the adapter's port at the ground module's `LINK_UART_BAUD`.
-* **USB:** open the module's port; any baud rate. The module only delivers data while a
-  program has the port open. If the software connects but nothing arrives, it probably
-  doesn't set DTR; rebuild the ground module with `-DLINK_USB_IGNORE_DTR=1` in its
-  `link_defines_master_usb.txt`.
+* **USB:** open the module's port; any baud rate. It shows up as "R9M serial link"
+  (USB ID `1209:0001`).
+* **Mission Planner:** pick the port and connect; the baud setting doesn't matter for USB.
+* **QGroundControl:** it only auto-connects to devices it knows, so add the port once:
+  Application Settings → Comm Links → Add, type Serial, the module's port (any baud),
+  then Connect.
 
 ## 7. First bench test
 
@@ -206,5 +208,6 @@ Do this before trusting the link on a craft.
 | Green, but garbage on one side | Baud mismatch between the module and the device it's wired to. Note that MAVLink and MSP are binary, so they always look like garbage in a text serial monitor; check them with a ground station or MAVLink tool instead |
 | Mission Planner gets heartbeats but times out connecting / stalls downloading parameters | Built without `LINK_MAVLINK=1`; ArduPilot overflows the link |
 | Green, data arrives in bursts or is choppy | More data offered than the link carries; lower stream rates or choose a faster preset |
-| USB port opens but no data | Host doesn't set DTR; build with `LINK_USB_IGNORE_DTR=1` |
+| USB port opens but no data | Built with `LINK_USB_REQUIRE_DTR=1` and the host doesn't set DTR (Mission Planner doesn't) |
+| QGroundControl says a flight controller is in DFU/bootloader mode | Old firmware with the STM32 default USB ID; rebuild and reflash the ground module |
 | USB device not detected | D+ pull-up missing, or LEDs still connected to PA11/PA12 |

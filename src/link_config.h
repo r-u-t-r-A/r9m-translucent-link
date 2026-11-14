@@ -34,11 +34,19 @@
 // virtual COM port (CDC ACM) instead of a UART. Needs a hardware mod: PA11 =
 // D-, PA12 = D+, 1.5k pull-up D+ to 3.3V, and the LEDs removed from those pins.
 // No baud rate to match, and the host is flow controlled by USB itself.
-// Data from the air is only delivered while a program has the port open
-// (DTR set); otherwise it is discarded. For host software that never sets
-// DTR, set LINK_USB_IGNORE_DTR 1 (then data waits until it is read).
-#ifndef LINK_USB_IGNORE_DTR
-#define LINK_USB_IGNORE_DTR     0
+// The port counts as closed when the host has read nothing for
+// LINK_USB_CLOSED_MS while data is waiting; that data is then discarded, like
+// a cable with nothing on the other end. Shorter stalls hold the link back
+// instead of losing bytes. DTR is ignored, because Mission Planner doesn't
+// set it. LINK_USB_REQUIRE_DTR 1: the port is only open while DTR is set.
+#ifdef LINK_USB_IGNORE_DTR
+#error "LINK_USB_IGNORE_DTR is gone: DTR is now ignored by default (see LINK_USB_REQUIRE_DTR)"
+#endif
+#ifndef LINK_USB_REQUIRE_DTR
+#define LINK_USB_REQUIRE_DTR    0
+#endif
+#ifndef LINK_USB_CLOSED_MS
+#define LINK_USB_CLOSED_MS      250
 #endif
 //
 // UART mode:

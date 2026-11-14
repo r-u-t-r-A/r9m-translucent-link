@@ -97,7 +97,8 @@ do.
 | `LINK_UART_BAUD` | `115200` | UART baud rate, 8N1. Ignored in USB builds. Anything the STM32 USART supports; it doesn't have to match the other module. |
 | `LINK_UART_RX_PIN` | `PA10` | UART RX pin (data into the module). |
 | `LINK_UART_TX_PIN` | `PA9` | UART TX pin (data out of the module). |
-| `LINK_USB_IGNORE_DTR` | `0` | USB builds: `1` treats the port as open even if the host never sets DTR. Data then waits until it is read, instead of being discarded while no program has the port open. |
+| `LINK_USB_CLOSED_MS` | `250` | USB builds: the port counts as closed when the host has read nothing for this long while data is waiting. That data is then discarded, so the far end isn't stalled and there's no stale backlog when a program opens the port. Shorter stalls hold the link back instead of losing bytes. |
+| `LINK_USB_REQUIRE_DTR` | `0` | USB builds: `1` treats the port as closed whenever DTR is off. Off by default because Mission Planner doesn't set DTR. |
 | `LINK_DROP_INPUT_WHEN_DISCONNECTED` | `1` | `1`: input that arrives while the radio link is down is discarded, and the input buffer is cleared when the link goes down, so the far end doesn't get a burst of stale data on reconnect. `0`: keep queueing (up to `LINK_TX_FIFO_SIZE`). |
 
 The RX/TX pins must belong to the same USART on the STM32F103:

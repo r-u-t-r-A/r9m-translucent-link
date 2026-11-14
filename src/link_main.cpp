@@ -325,6 +325,10 @@ static MavRadioStatus radioStatus()
 }
 #endif
 
+#if defined(LINK_USB_SERIAL)
+static uint32_t lastHostReadMs; // last time the USB host took data
+#endif
+
 static void serviceSerial(uint32_t nowMs)
 {
     while (LinkPort.available())
@@ -351,9 +355,16 @@ static void serviceSerial(uint32_t nowMs)
 #endif
 
 #if defined(LINK_USB_SERIAL)
-    // No program has the port open (DTR low): nobody is listening, so drop
-    // the data like an unplugged cable instead of stalling the far end.
-    if (!SerialUSB.dtr())
+    // Port closed: nobody is listening, so drop the data like an unplugged
+    // cable instead of stalling the far end.
+#if LINK_USB_REQUIRE_DTR
+    const bool portClosed = !SerialUSB.dtr();
+#else
+    if (!link.airToUart.size())
+        lastHostReadMs = nowMs; // nothing waiting, nothing to judge
+    const bool portClosed = (nowMs - lastHostReadMs) >= LINK_USB_CLOSED_MS;
+#endif
+    if (portClosed)
     {
         link.airToUart.clear();
 #if LINK_MAVLINK
@@ -421,6 +432,10 @@ static void serviceSerial(uint32_t nowMs)
             lastOutMs = nowMs;
 #endif
         link.airToUart.drop(written);
+#if defined(LINK_USB_SERIAL)
+        if (written)
+            lastHostReadMs = nowMs;
+#endif
     }
 }
 
@@ -540,8 +555,8 @@ void setup()
     setLed(LINK_LED_GREEN_PIN, false);
 
     LinkPort.begin(LINK_UART_BAUD); // baud is ignored for USB
-#if defined(LINK_USB_SERIAL) && LINK_USB_IGNORE_DTR
-    SerialUSB.dtr(false); // treat the port as open once the host configures it
+#if defined(LINK_USB_SERIAL) && !LINK_USB_REQUIRE_DTR
+    SerialUSB.dtr(false); // CDC_connected() then doesn't need DTR
 #endif
 
     // XOR so the hop pattern differs from an ELRS link using the same phrase
